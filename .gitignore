@@ -7,6 +7,8 @@ venv/
 # ===== 数据与模型权重（大文件，绝不提交，否则会超 10MB）=====
 data/
 datasets/
+checkpoints/
+ckpt/
 *.ckpt
 *.pt
 *.pth
