@@ -28,3 +28,31 @@ datasets/
 *.zip
 离线写作说明.txt
 请将插图放在此目录.txt
+
+# ===== 敏感信息（令牌 / 密码 / 私钥 / 本机环境文件）=====
+.env
+.env.*
+*.key
+*.pem
+*.p12
+secrets/
+credentials/
+
+# ===== 数据（视频 + proto 标注，体积大且可再生成/另存）=====
+*.mp4
+*.proto
+
+# ===== 运行中间产物（可再生成）=====
+out/
+pred/
+metrics.json
+*.log
+
+# ===== 编辑器与系统缓存 =====
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ===== 第四天课件截图（非本人产出）=====
+第四天要求/
