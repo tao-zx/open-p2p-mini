@@ -9,28 +9,29 @@
 | `scripts/` | 三个脚本：`preprocess.py`（数据准备）、`infer.py`（推理）、`evaluate.py`（评测） |
 | `202500502046-陶子萱-实践报告0X-…/` | 按天的实践报告与阶段文档（需求、选型、约定、报告正文） |
 | `项目备忘.md`、`开发日志.md` | 稳定约定与按天日志，下任务前先读 |
-| `data/`、`out/`、`pred/`、`ckpt/` | 数据、中间产物、权重（不提交，见 `.gitignore`） |
+| `data/`、`out/`、`pred/`、`checkpoints/` | 数据、中间产物、权重（不提交，见 `.gitignore`） |
 
 ## 环境要求
 
-- 第 4 天（假实现阶段）只需 **Python 3.11**，脚本仅用标准库（`argparse` / `json` / `os` / `sys`），无需安装任何依赖。
-- 第 5 天起（真实阶段）改用 **uv** 管理依赖：`uv sync` 安装 PyTorch 与官方依赖。
+- **preprocess.py（已接真实实现）**：需 **Python 3.11 + OpenCV**（`cv2`，读视频帧）。
+- **infer.py / evaluate.py（仍为假实现）**：仅需 Python 3.11 标准库。
+- 第 5 天起（infer/evaluate 接真实）改用 **uv** 管理依赖：`uv sync` 安装 PyTorch 与官方依赖。
 
 ## 安装依赖
 
-- 假实现阶段：无需安装，直接运行下方命令。
-- 真实阶段（第 5 天）：`uv sync`（届时补 `pyproject.toml` / 依赖清单）。
+- 当前阶段：跑 preprocess 需装 OpenCV：`pip install opencv-python`（infer/evaluate 假实现无需装）。
+- 真实推理阶段（第 5 天）：`uv sync`（届时补 `pyproject.toml` / 依赖清单）。
 
 ## 启动 / 首跑
 
-在仓库根目录依次执行三条命令（当前为假实现，输出固定占位数据）：
+在仓库根目录依次执行三条命令（preprocess 已接真实实现；infer/evaluate 仍为假实现）：
 
 ```bash
-# 1) 数据准备：生成 200 条空样本（动作全 0）+ 统计表
-python scripts/preprocess.py --data_dir toy-examples --out_dir out --n_frames 200
+# 1) 数据准备：真读 toy 数据 → 200 帧清洗样本（帧图片 + 人类动作标注）+ 统计表
+python scripts/preprocess.py --data_dir data/toy-examples --out_dir out --n_frames 200
 
-# 2) 推理：生成 200 帧全 0 预测
-python scripts/infer.py --weights ckpt/150m.pt --samples out/samples.json --out pred
+# 2) 推理：生成 200 帧全 0 预测（假实现）
+python scripts/infer.py --weights checkpoints/150M/checkpoint-step=00500000.ckpt --samples out/samples.json --out pred
 
 # 3) 评测：输出按键准确率 / 鼠标相关系数（假实现固定 0.0% / 0.0）
 python scripts/evaluate.py --pred pred/predictions.json --label out/samples.json
@@ -50,7 +51,7 @@ python scripts/evaluate.py --pred pred/predictions.json --label out/samples.json
 [OK] 写出 metrics.json
 ```
 
-> 说明：第 4 天是假实现，`--data_dir` / `--weights` 只是占位参数，脚本不真正读取；`0.0% / 0.0` 也是占位值。真实 toy 数据与 150M 权重第 5 天下载后，这里才有实际内容与真实指标。
+> 说明：preprocess 已接真实实现（读 `192x192.mp4` + `annotation.proto`，产出 200 帧真样本与真统计表，见 `out/samples.json`、`out/stats.csv`、`out/frames/`）；infer/evaluate 仍为假实现，`--weights` 只是占位参数，`0.0% / 0.0` 也是占位值。第 5 天把 infer/evaluate 换真实实现后，这里才有真实预测与指标。
 
 ## 停止
 
