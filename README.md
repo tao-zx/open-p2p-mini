@@ -48,7 +48,7 @@ python scripts/evaluate.py --pred pred/predictions.json --label out/samples.json
 [OK] 鼠标相关系数 = 0.756 （阈值 0.5，x=0.741 / y=0.772）
 ```
 
-> `infer.py` 的 `--mode free_running` 用于第 5 天录屏演示"模型自主运行"（逐帧自主预测、误差累积、key_acc 天然偏低）；验收指标用默认的 `teacher_forcing`。详见 `演示说明.md`。
+> `infer.py` 的 `--mode free_running` 用于录屏演示"模型自主运行"（逐帧自主预测、误差累积、key_acc 天然偏低）；验收指标用默认的 `teacher_forcing`。详见 `演示说明.md`。
 
 ## 停止
 
