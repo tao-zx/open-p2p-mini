@@ -2,7 +2,8 @@
 """preprocess.py —— 数据准备（主路径第一步）。
 
 真实实现：从 --data_dir 选 1 个 run（单一游戏），读 192x192.mp4 + annotation.proto，
-连续取前 --n_frames 帧作为测试片段，切出帧图片 + 逐帧动作标注（system_action 优先，对齐官方）。
+用滑动窗口客观选一段"动作最丰富"的连续 --n_frames 帧作为测试片段（避免取游戏开头的
+单调前进段导致指标虚高），切出帧图片 + 逐帧动作标注（system_action 优先，对齐官方）。
 约定见 接口约定.md；退出码 0=成功 / 2=参数错误 / 3=数据错误。
 """
 import argparse
@@ -68,8 +69,37 @@ def extract_action(frame_annotation):
     }
 
 
-def read_video_frames(video_path, n_take):
-    """用 torchcodec（官方读帧工具，输出 RGB uint8）读 mp4 前 n_take 帧。
+def select_window(anns, n_frames):
+    """客观选段：滑动窗口找"动作种类最丰富"的连续 n_frames 帧，返回起始帧 index。
+
+    丰富度分数 = 去重按键种类数 × 10 + 含鼠标位移(1) + 含鼠标点击(1)；并列取最早窗口。
+    规则机械、可复现，用于避免取到"游戏开头单调前进"的简单段（简单段会让按键/鼠标
+    指标虚高，不能代表模型整体能力）。
+    """
+    total = len(anns)
+    if total <= n_frames:
+        return 0
+    acts = [extract_action(a) for a in anns]  # 每帧动作预提取，避免窗口内重复解析
+    best_start, best_score = 0, -1
+    for s in range(total - n_frames + 1):
+        keys_seen = set()
+        has_mouse_move = False
+        has_mouse_click = False
+        for i in range(s, s + n_frames):
+            a = acts[i]
+            keys_seen.update(a["keys"])
+            if a["mouse_delta_x"] != 0 or a["mouse_delta_y"] != 0:
+                has_mouse_move = True
+            if a["mouse_buttons"]:
+                has_mouse_click = True
+        score = len(keys_seen) * 10 + int(has_mouse_move) + int(has_mouse_click)
+        if score > best_score:
+            best_start, best_score = s, score
+    return best_start
+
+
+def read_video_frames(video_path, n_take, start=0):
+    """用 torchcodec（官方读帧工具，输出 RGB uint8）读 mp4 从 start 起的 n_take 帧。
 
     返回 (frames_np, total_frames)：frames_np 形状 (n, H, W, 3) uint8 RGB。
     torchcodec 只在真实读帧时才 import（本机可能未装，参数校验不依赖它）。
@@ -79,8 +109,8 @@ def read_video_frames(video_path, n_take):
 
     decoder = VideoDecoder(str(video_path), device="cpu", num_ffmpeg_threads=1)
     total = len(decoder)
-    n = min(n_take, total)
-    frames_t = decoder[0:n]  # (n, C, H, W) uint8 RGB
+    n = max(0, min(n_take, total - start))
+    frames_t = decoder[start:start + n]  # (n, C, H, W) uint8 RGB
     frames_t = frames_t.permute(0, 2, 3, 1)  # (n, H, W, C)
     return frames_t.numpy(), total
 
@@ -98,19 +128,23 @@ def run(args):
         print(f"[ERROR] 未在 {args.data_dir} 找到 192x192.mp4 + annotation.proto（退出码 3）", file=sys.stderr)
         return 3
 
-    # 选 1 个 run（sorted 保证可复现）作为"单一游戏测试集"，连续取前 n_frames 帧。
+    # 选 1 个 run（sorted 保证可复现）作为"单一游戏测试集"，客观选段后连续取 n_frames 帧。
     # 对齐课题"测试集 200 帧（与训练/微调数据隔离，Toy 或所选单一游戏）"与官方口径，
     # 而非多视频均匀采样（均匀采样破坏帧间时序，会拉低行为克隆评估指标）。
     video_path, proto_path = videos[0]
     _meta, anns = parse_annotation(proto_path)
+
+    # 客观选段：滑动窗口找"动作种类最丰富"的连续 n_frames 帧，避免取开头简单段（虚高）
+    start = select_window(anns, args.n_frames)
+
     try:
-        frames_np, total_frames = read_video_frames(video_path, args.n_frames)
+        frames_np, total_frames = read_video_frames(video_path, args.n_frames, start)
     except Exception as e:  # noqa: BLE001
         print(f"[ERROR] 读视频失败: {video_path}（{e}，退出码 3）", file=sys.stderr)
         return 3
     if total_frames <= 0:
         total_frames = len(anns)  # 兜底：标注数即帧数
-    n_take = min(args.n_frames, total_frames, len(anns), len(frames_np))
+    n_take = max(0, min(args.n_frames, total_frames - start, len(anns) - start, len(frames_np)))
     rel_video = os.path.relpath(video_path, args.data_dir).replace(os.sep, "/")
 
     # 顺序读帧（torchcodec 输出 RGB uint8，顺序保证 frame_index 与画面精确对应），切帧 + 取标注
@@ -128,15 +162,15 @@ def run(args):
         frame_name = f"{frame_id:04d}.png"
         frame_path = f"frames/{frame_name}"  # 存 JSON 用正斜杠，跨平台可复现
         Image.fromarray(img).save(os.path.join(args.out_dir, "frames", frame_name))
-        ann = anns[i] if i < len(anns) else None
+        ann = anns[start + i] if start + i < len(anns) else None
         if ann is None:
-            print(f"[WARN] {rel_video} 第 {i} 帧无标注，跳过", file=sys.stderr)
+            print(f"[WARN] {rel_video} 第 {start + i} 帧无标注，跳过", file=sys.stderr)
         else:
             frames.append(
                 {
                     "frame_id": frame_id,
                     "video": rel_video,
-                    "frame_index": i,
+                    "frame_index": start + i,
                     "frame_path": frame_path,  # 相对 --out_dir
                     **extract_action(ann),
                 }
