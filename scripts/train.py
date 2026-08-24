@@ -39,6 +39,10 @@ def parse_args(argv):
     parser.add_argument("--n_steps", type=int, default=1000, help="微调步数（默认 1000）")
     parser.add_argument("--freeze_steps", type=int, default=0,
                         help="冻结 transformer 层的前 N 步（0=全量微调，>0 先只训动作头再解冻）")
+    parser.add_argument("--lr", type=float, default=None,
+                        help="覆盖微调学习率（默认 None=用配置 150M.yaml 的 1e-4；微调建议降到 3e-5，避免灾难性遗忘）")
+    parser.add_argument("--weight_decay", type=float, default=None,
+                        help="覆盖权重衰减（默认 None=用配置 150M.yaml 的 1e-4）")
     parser.add_argument("--save_every", type=int, default=100, help="每多少步存一次 checkpoint")
     parser.add_argument("--compile", action="store_true",
                         help="启用 torch.compile（默认关闭走 eager，避免服务器缺 Python.h 的 JIT 崩）")
@@ -136,6 +140,12 @@ def run(args):
         vd.local_prefix = args.data_dir
     config.stage3_finetune.n_training_steps = args.n_steps
     config.stage3_finetune.freeze_transformer_layers_for_steps = args.freeze_steps
+    if args.lr is not None:
+        config.stage3_finetune.optim.learning_rate = args.lr
+        print(f"[OK] 覆盖微调学习率 = {args.lr}")
+    if args.weight_decay is not None:
+        config.stage3_finetune.optim.weight_decay = args.weight_decay
+        print(f"[OK] 覆盖权重衰减 = {args.weight_decay}")
     config.shared.output_path = args.out_dir
     config.wandb.enabled = False
 
