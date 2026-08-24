@@ -1,0 +1,50 @@
+# 课题六 · 行动克隆游戏智能体（Open P2P）— 依赖固定（块 1）
+#
+# 用途：让第二人 `uv sync` 一键复现环境（主路径三脚本所需依赖）。
+# 分层说明见 依赖清单.md；脚本接口/退出码见 接口约定.md。
+#
+# 关键点：
+# - `evaluate.py` 纯标准库，`preprocess.py`/`infer.py` 才需第三方库（见下）。
+# - `elefant`（官方 open-p2p 仓库）不是 pip 包，是路径依赖的官方源码，
+#   由 infer.py 的 `--official-repo` 指定，不写进这里（见 依赖清单.md 第 2 层）。
+# - torch 从 pytorch-cuda-stable(cu128) 装、torchcodec 从 pytorch-cpu-stable 装，
+#   与官方 pyproject 的 [tool.uv.sources] 对齐，保证 wheel 一致。
+
+[project]
+name = "open-p2p-action-cloning"
+version = "0.1.0"
+description = "课题六 · 行动克隆游戏智能体（Open P2P）— 主路径三脚本 + 依赖固定"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "pillow>=10.4",
+    "protobuf>=5.29",
+]
+
+[project.optional-dependencies]
+# 真实预处理（torchcodec 读帧）+ 推理（torch/lightning）所需，仅 GPU/Linux 环境装。
+# `uv sync --extra gpu` 一键装；纯评测（evaluate.py）只需基础 dependencies。
+gpu = [
+    "torch>=2.5",
+    "torchcodec>=0.6.0",
+    "lightning>=2.5.0",
+]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cuda-stable", marker = "sys_platform == 'win32' or sys_platform == 'linux'" },
+    { index = "pytorch-cpu-stable", marker = "sys_platform == 'darwin'" },
+]
+torchcodec = [
+    { index = "pytorch-cpu-stable", marker = "sys_platform == 'linux'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu-stable"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cuda-stable"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
