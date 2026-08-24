@@ -27,18 +27,20 @@
 | 数据字段与格式 | `202500502046-陶子萱-实践报告03-数据与约定/数据模型.md` |
 | 主路径复现步骤（环境 + 命令 + 预期现象 + 失败检查） | `演示说明.md` |
 | 启动 / 停止 / 环境要求 | `README.md` |
+| 依赖与环境复现（uv sync 分层） | `pyproject.toml` + `依赖清单.md` |
 | 各天老师要求（截图/OCR/录音） | `要求/` |
 
 ## 三、关键口径速览（高频，防踩坑）
 
 - **验收指标**：按键准确率 ≥55%（keys 集合精确匹配）、鼠标相关系数 ≥0.5（x/y Pearson 平均）；当前基线 **88.0% / 0.756**（x=0.741 / y=0.772）。
 - **GT 动作口径**：`system_action` 优先，未知回退 `user_action`，都未知则空动作。
-- **测试集**：单一游戏（1 个 run）连续 200 帧，滑动窗口选「动作最丰富」段（按键种类 ×10 + 鼠标位移/点击加分）。
+- **测试集**：单一游戏（1 个 run）连续 200 帧，滑动窗口选「动作最丰富」段（按键种类 ×10 + 鼠标位移/点击加分）；当前测试集 = toy 第一段 = `call-of-duty-mobile`（toy 实为 full-data 子集）。
+- **微调**：选 `call-of-duty-mobile`（与测试集同游戏，80h/1230 条，排除 3 个 toy UUID 取 2h）；指标 = 按键 +8pp 或 鼠标 +0.08；不得下载全库。
 - **读帧**：`torchcodec`（RGB），不用 `cv2`（BGR）。
 - **推理模式**：`teacher_forcing`（验收，一次前向）/ `free_running`（演示，逐帧自回归，误差累积、天然偏低）。
-- **环境**：GPU 服务器 + open-p2p venv（torch 2.11+cu128、torchcodec、protobuf）；本机 Windows 无 N 卡，跑不了真推理。
+- **环境**：GPU 服务器 + open-p2p venv（torch 2.11+cu128、torchcodec、protobuf）；本机 Windows 无 N 卡，跑不了真推理。依赖固定见 `pyproject.toml` + `依赖清单.md`（`uv sync --extra gpu`；`elefant` 由 `--official-repo` 指路）。
 - **GPU 数据存放**：长期文件放 `/root/workspace`（他处随时丢失）。
-- **git push**：走本机 Clash 代理 `127.0.0.1:7890`，否则直连被墙。
+- **git push**：走本机 Clash 代理 `127.0.0.1:7890`，否则直连被墙。**注意：代理仅用于 git push 等轻量请求；大批量数据下载（huggingface/curl 下 batch、权重）应直连 CDN，代理反而慢且易断**（第 6 天实测：直连 us.aws.cdn.hf.co ≈13.7MB/s，走代理 ≈0.6MB/s 且 43GB 反复断）。
 
 ## 四、新对话开工流程（新对话第一步照做）
 
@@ -47,4 +49,4 @@
 3. 改脚本 / 数据前，按需读 `接口约定.md` / `数据模型.md`；跑主路径前读 `演示说明.md`。
 4. 开工前先向用户**复述当前进度 + 下一步计划**，确认无误再动手。
 
-> **当前进度（第 6 天开始时）**：主路径已贯通（88.0% / 0.756），harness 已建。接下来按顺序：块 1 依赖固定 → 块 2 微调 → 交叉阅读 → 开发日志 → 报告06。
+> **当前进度（第 6 天进行中，08-24 更新）**：主路径已贯通（88.0% / 0.756），harness 已建。块 1 依赖固定完成（`pyproject.toml` + `依赖清单.md` 落地；服务器 `uv sync --extra gpu` 自测通过——torch 2.11.0+cu128 / torchcodec 0.16.0 / lightning 2.6.5，三脚本成败例过；infer 成功例需官方 venv 的 elefant 依赖）。块 2 微调推进中：定游戏 = call-of-duty-mobile，`train.py` + `prepare_finetune_data.py` 已落地 + 冒烟通过；batch 167（43GB）直连 CDN 下载中。接下来：下载完成 → 过滤 2h 子集 → 服务器 `train.py` 微调 + infer/evaluate 指标对比 → 交叉阅读 → 开发日志 → 报告06。
