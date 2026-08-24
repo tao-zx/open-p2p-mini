@@ -8,10 +8,11 @@
 
 | 路径 | 职责 |
 |---|---|
-| `scripts/` | 三个脚本：`preprocess.py`（数据准备）、`infer.py`（推理，双模式）、`evaluate.py`（评测） |
+| `scripts/` | 五个脚本：`preprocess.py`（数据准备）、`infer.py`（推理，双模式）、`evaluate.py`（评测）、`train.py`（微调，扩展）、`prepare_finetune_data.py`（微调数据准备，扩展，服务器侧） |
 | `演示说明.md` | 主路径复现操作文档（环境前提 + 编号步骤 + 预期现象 + 失败检查） |
 | `202500502046-陶子萱-实践报告0X-…/` | 按天的实践报告与阶段文档（需求、选型、约定、报告正文） |
 | `项目备忘.md`、`开发日志.md` | 稳定约定与按天日志，下任务前先读 |
+| `pyproject.toml`、`依赖清单.md` | 依赖固定（`uv sync --extra gpu` 一键复现） |
 | `data/`、`out/`、`pred/`、`checkpoints/` | 数据、中间产物、权重（不提交，见 `.gitignore`） |
 
 ## 环境要求（真实推理）
@@ -19,7 +20,7 @@
 真实推理需 **GPU + 官方 open-p2p 依赖**，本机无 N 卡的 Windows 环境无法完整跑通。完整环境准备、数据/权重获取、逐步命令与预期现象见 [`演示说明.md`](演示说明.md)。要点：
 
 - **算力**：GPU 服务器（本课题用 NVIDIA Quadro RTX 6000 24GB）。
-- **依赖**：官方 open-p2p 仓库（含 `elefant` 包）+ 其 venv（Python 3.12，torch 2.11+cu128、lightning、torchcodec、protobuf）。
+- **依赖**：官方 open-p2p 仓库（含 `elefant` 包）+ 其 venv（Python 3.12，torch 2.11+cu128、lightning、torchcodec、protobuf）。本项目依赖固定：`uv sync --extra gpu`（见 `pyproject.toml` + `依赖清单.md`；`elefant` 由 `infer.py --official-repo` 指路）。
 - **数据与权重**（运行前提，不入库）：toy 数据（`p2p-toy-examples`）、150M 权重 `checkpoint-step=00500000.ckpt`；获取见 `开发日志.md` 第 4 天。
 - 三个脚本均只依赖标准库 + 上述官方依赖；`evaluate.py` 仅标准库，可在任意 Python 3.11+ 环境跑。
 
