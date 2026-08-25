@@ -20,6 +20,8 @@ ckpt/
 # ===== 老师课件与截图（非本人产出，忽略后可保仓库 <1MB）=====
 实践指导书.pdf
 指导书_提取.txt
+# 参考文献（Open P2P 本体论文 arXiv 2601.04575，非本人产出，不入库）
+2601.04575v2.pdf
 # 各天老师要求截图/OCR/录音（统一目录，非本人产出）
 要求/
 
@@ -45,6 +47,7 @@ credentials/
 out/
 pred/
 metrics.json
+metrics.smoke.json
 *.log
 
 # ===== 编辑器与系统缓存 =====
