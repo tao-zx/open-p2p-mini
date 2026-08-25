@@ -31,6 +31,10 @@ def parse_args(argv):
     p.add_argument("--official-repo", default=None, help="官方 open-p2p 仓库根目录（含 elefant）")
     p.add_argument("--smoke_out", default="out/smoke", help="冒烟 preprocess 输出目录")
     p.add_argument("--smoke_pred", default="pred/smoke", help="冒烟 infer 输出目录")
+    p.add_argument("--finetune_weights", default="out_gta_cosine/checkpoints/checkpoint-step=00000700.ckpt",
+                   help="微调后 checkpoint（扩展路径·权重加载用例）")
+    p.add_argument("--finetune_data_dir", default="data/gta-2h", help="微调数据目录（扩展路径·train 冒烟用例）")
+    p.add_argument("--finetune_smoke_out", default="out/finetune-smoke", help="train 冒烟输出目录")
     return p.parse_args(argv)
 
 
@@ -141,6 +145,48 @@ def main(argv):
     cmd = [PY, "scripts/evaluate.py", "--pred", "/nonexistent", "--label", "/nonexistent"]
     rc, _ = _run(cmd)
     add("8", "异常 evaluate 预测/标注不存在", "exit 3 + [ERROR]", f"exit {rc}", rc == 3)
+
+    # ---- 扩展路径（第 8 天补：微调权重加载 + train.py 冒烟，防 5.1/5.3 类 bug）----
+    config_yaml = os.path.join(os.path.dirname(args.weights), "model_config.yaml")
+    if not gpu:
+        rows.append(("9", "扩展·微调权重加载", "exit 0 + [OK] 推理（不报设备不匹配）",
+                     "跳过（本机无 CUDA GPU）", None))
+    elif not os.path.isfile(args.finetune_weights):
+        rows.append(("9", "扩展·微调权重加载", "exit 0 + [OK] 推理（不报设备不匹配）",
+                     f"失败（缺 {args.finetune_weights}）", False))
+    elif not os.path.isfile(samples_smoke):
+        rows.append(("9", "扩展·微调权重加载", "exit 0 + [OK] 推理（不报设备不匹配）",
+                     f"失败（缺 {samples_smoke}，步骤1 未产出）", False))
+    else:
+        cmd = [PY, "scripts/infer.py", "--weights", args.finetune_weights, "--samples", samples_smoke,
+               "--out", args.smoke_pred + "_ft", "--mode", "teacher_forcing",
+               "--config", config_yaml]
+        if args.official_repo:
+            cmd += ["--official-repo", args.official_repo]
+        rc, out = _run(cmd)
+        ok = rc == 0 and "[OK] 推理" in out
+        add("9", "扩展·微调权重加载", "exit 0 + [OK] 推理（不报设备不匹配）", f"exit {rc}", ok)
+
+    if not gpu:
+        rows.append(("10", "扩展·train.py 1步冒烟", "exit 0 + [OK] 微调完成",
+                     "跳过（本机无 CUDA GPU）", None))
+    elif not os.path.isdir(args.finetune_data_dir):
+        rows.append(("10", "扩展·train.py 1步冒烟", "exit 0 + [OK] 微调完成",
+                     f"失败（缺 {args.finetune_data_dir}）", False))
+    else:
+        # 注意：不显式传 --config，让 train.py 靠 --official-repo 取官方 150M.yaml（训练配置，
+        # 含完整 rand_augment.augmentations）。checkpoints/150M/model_config.yaml 是推理配置，
+        # 其 stage3_finetune.rand_augmentation 只有 fraction_augmented=1.0 却无 augmentations，
+        # 会触发官方 stage3_finetune.py:119 的 assert（第 8 天踩到）。
+        cmd = [PY, "scripts/train.py", "--weights", args.weights, "--data_dir", args.finetune_data_dir,
+               "--out_dir", args.finetune_smoke_out, "--n_steps", "1",
+               "--save_every", "1",
+               "--freeze_tokenizer", "--lr_schedule", "cosine", "--warmup_steps", "1"]
+        if args.official_repo:
+            cmd += ["--official-repo", args.official_repo]
+        rc, out = _run(cmd)
+        ok = rc == 0 and "[OK] 微调完成" in out
+        add("10", "扩展·train.py 1步冒烟", "exit 0 + [OK] 微调完成", f"exit {rc}", ok)
 
     # ---- 通检表 ----
     print("\n" + "=" * 78)

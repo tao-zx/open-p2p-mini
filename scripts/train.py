@@ -232,7 +232,9 @@ def run(args):
     # 不用 trainer.save_checkpoint()：其写出的 finetuned.ckpt 有 flex_attention 的
     # block_mask 落在 CPU、q/k/v 落在 CUDA 的设备不匹配坑（第 6 天踩到，待决问题 #4）。
     ckpt_dir = os.path.join(args.out_dir, "checkpoints")
-    saved = sorted(f for f in os.listdir(ckpt_dir) if f.endswith(".ckpt"))
+    # n_steps < save_every 时 ModelCheckpoint 一次没存、目录不存在，os.listdir 会抛
+    # FileNotFoundError（1 步冒烟触发过）；加 isdir 保护，无快照则走 WARN 分支正常收尾。
+    saved = sorted(f for f in os.listdir(ckpt_dir) if f.endswith(".ckpt")) if os.path.isdir(ckpt_dir) else []
     final_path = os.path.join(ckpt_dir, saved[-1]) if saved else None
     if final_path is None:
         print("[WARN] 未找到 ModelCheckpoint 快照（save_every 未覆盖？）", file=sys.stderr)
