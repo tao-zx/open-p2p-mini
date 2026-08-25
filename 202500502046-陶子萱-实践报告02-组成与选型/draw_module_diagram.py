@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""绘制 课题六「行动克隆游戏智能体」系统模块图（实践报告02 用）。"""
+"""绘制 课题六“行动克隆游戏智能体”系统模块图（实践报告02 用）。"""
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt

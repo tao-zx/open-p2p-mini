@@ -2,7 +2,7 @@
 """train.py —— 微调（扩展，块 2 真实实现）。
 
 真实实现：加载官方 150M 预训练权重（Stage3LabelledBCLightning.load_from_checkpoint），
-在 full-data 的「1 款游戏 2 小时」子集上继续微调（teacher-forcing 行为克隆），产出
+在 full-data 的“1 款游戏 2 小时”子集上继续微调（teacher-forcing 行为克隆），产出
 微调后权重；再用 infer.py 跑同一测试片段、evaluate.py 对比指标（按键 +8pp 或 鼠标 +0.08）。
 
 关键点（与官方差异，均附出处）：
