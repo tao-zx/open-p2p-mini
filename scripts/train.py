@@ -17,11 +17,15 @@
   对齐官方 train.py 的 `--no_compile`，见 elefant/policy_model/train.py:31-33）。
 - 单 GPU、bf16-mixed、关 wandb（本地训练日志用 CSVLogger；官方多卡 DDP 会与
   accumulate_grad_batches 死锁，见 stage3_finetune.py:1083-1085 注释）。
+- 换方法（第 7 天，应对"2h 子集微调不升反降"）：`--freeze_tokenizer` 冻图像 tokenizer、
+  `--lr_schedule cosine` + `--warmup_steps` 加 warmup+cosine 调度（官方 configure_optimizers
+  只给常数 LR、无调度器，见 stage3_finetune.py:1011-1023）。
 
 约定见 接口约定.md；退出码 0=成功 / 2=参数错误 / 3=数据错误。
 """
 import argparse
 import json
+import math
 import os
 import sys
 
@@ -39,6 +43,12 @@ def parse_args(argv):
     parser.add_argument("--n_steps", type=int, default=1000, help="微调步数（默认 1000）")
     parser.add_argument("--freeze_steps", type=int, default=0,
                         help="冻结 transformer 层的前 N 步（0=全量微调，>0 先只训动作头再解冻）")
+    parser.add_argument("--freeze_tokenizer", action="store_true",
+                        help="冻结图像 tokenizer（17.4M 帧编码器，游戏无关），只微调 transformer + 动作头")
+    parser.add_argument("--lr_schedule", choices=["constant", "cosine"], default="constant",
+                        help="学习率调度：constant=常数 LR（官方默认）；cosine=warmup + cosine 衰减")
+    parser.add_argument("--warmup_steps", type=int, default=0,
+                        help="cosine 调度下的 warmup 步数（线性从 0 升到峰值 LR；0=无 warmup）")
     parser.add_argument("--lr", type=float, default=None,
                         help="覆盖微调学习率（默认 None=用配置 150M.yaml 的 1e-4；微调建议降到 3e-5，避免灾难性遗忘）")
     parser.add_argument("--weight_decay", type=float, default=None,
@@ -64,6 +74,9 @@ def validate_args(args):
         return 2
     if args.freeze_steps < 0:
         print(f"[ERROR] --freeze_steps 不能为负，收到 {args.freeze_steps}（退出码 2）", file=sys.stderr)
+        return 2
+    if args.warmup_steps < 0:
+        print(f"[ERROR] --warmup_steps 不能为负，收到 {args.warmup_steps}（退出码 2）", file=sys.stderr)
         return 2
     return 0
 
@@ -160,8 +173,37 @@ def run(args):
     )
     logger = pl.pytorch.loggers.CSVLogger(save_dir=args.out_dir, name="logs")
 
+    callbacks = [checkpoint_callback]
+    if args.lr_schedule == "cosine":
+        peak_lr = config.stage3_finetune.optim.learning_rate
+
+        class _WarmupCosineLR(pl.Callback):
+            """warmup + cosine 学习率调度（官方 configure_optimizers 只给常数 LR、无调度器）。
+
+            每步 on_train_batch_start 按 global_step 覆盖 optimizer 的 lr：
+            - step < warmup_steps：线性从 0 升到 peak_lr；
+            - 之后：cosine 衰减到 0（peak_lr*0.5*(1+cos(pi*progress))）。
+            """
+            def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
+                step = trainer.global_step
+                warm = args.warmup_steps
+                if warm > 0 and step < warm:
+                    lr = peak_lr * (step + 1) / warm
+                else:
+                    progress = min(1.0, (step - warm) / max(1, args.n_steps - warm))
+                    lr = peak_lr * 0.5 * (1.0 + math.cos(math.pi * progress))
+                optimizers = trainer.optimizers
+                if not isinstance(optimizers, (list, tuple)):
+                    optimizers = [optimizers]
+                for optimizer in optimizers:
+                    for g in optimizer.param_groups:
+                        g["lr"] = lr
+
+        callbacks.append(_WarmupCosineLR())
+        print(f"[OK] 学习率调度 = cosine（warmup {args.warmup_steps} 步，peak_lr {peak_lr}）")
+
     trainer = pl.Trainer(
-        callbacks=[checkpoint_callback],
+        callbacks=callbacks,
         accelerator="gpu",
         devices=1,
         max_steps=args.n_steps,
@@ -176,18 +218,33 @@ def run(args):
         model = Stage3LabelledBCLightning.load_from_checkpoint(args.weights, config=config)
     print(f"[OK] 从 150M 权重加载模型: {args.weights}")
 
+    # 换方法①：冻图像 tokenizer（17.4M 帧编码器游戏无关），只微调 transformer + 动作头，
+    # 降低灾难性遗忘风险。需在 trainer.fit 调用 configure_optimizers 之前设 requires_grad。
+    if args.freeze_tokenizer:
+        for param in model.image_tokenizer.parameters():
+            param.requires_grad = False
+        print("[OK] 已冻结 image_tokenizer（只微调 transformer + 动作头）")
+
     print(f"[OK] 开始微调：{args.n_steps} 步，数据 {args.data_dir}")
     trainer.fit(model, datamodule)
 
-    # 保存最终权重 + 摘要（finetuned.ckpt 用同一 config 可被 infer.py load_from_checkpoint）
-    final_path = os.path.join(args.out_dir, "finetuned.ckpt")
-    trainer.save_checkpoint(final_path)
+    # 最终权重用 ModelCheckpoint 同款快照（可被 infer.py 直接 load_from_checkpoint）。
+    # 不用 trainer.save_checkpoint()：其写出的 finetuned.ckpt 有 flex_attention 的
+    # block_mask 落在 CPU、q/k/v 落在 CUDA 的设备不匹配坑（第 6 天踩到，待决问题 #4）。
+    ckpt_dir = os.path.join(args.out_dir, "checkpoints")
+    saved = sorted(f for f in os.listdir(ckpt_dir) if f.endswith(".ckpt"))
+    final_path = os.path.join(ckpt_dir, saved[-1]) if saved else None
+    if final_path is None:
+        print("[WARN] 未找到 ModelCheckpoint 快照（save_every 未覆盖？）", file=sys.stderr)
     summary = {
         "base_weights": args.weights,
         "data_dir": args.data_dir,
         "n_protos": len(protos),
         "n_steps": args.n_steps,
         "freeze_steps": args.freeze_steps,
+        "freeze_tokenizer": args.freeze_tokenizer,
+        "lr_schedule": args.lr_schedule,
+        "warmup_steps": args.warmup_steps,
         "config": config_yaml,
         "final_checkpoint": final_path,
     }
