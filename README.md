@@ -2,7 +2,7 @@
 
 让模型"看"游戏画面、直接输出键鼠动作的视觉-语言-动作（VLA）推理与评测项目。9 天 mini 项目的工程落地，主路径：toy 原始数据 → 预处理 → 200 帧清洗样本 → 推理（150M）→ 预测动作 → 评测 → 指标。
 
-**当前状态（第 5 天）**：主路径已端到端贯通，三脚本（preprocess / infer / evaluate）均为真实实现，真实指标 **按键准确率 88.0% / 鼠标相关系数 0.756**（阈值 55% / 0.5，评测 200 帧）。
+**当前状态（第 8 天）**：主路径已端到端贯通，三脚本（preprocess / infer / evaluate）均为真实实现，真实指标 **按键准确率 88.0% / 鼠标相关系数 0.756**（阈值 55% / 0.5，评测 200 帧）；第 8 天回归 smoke 10/10 全过（4 主路径 + 4 异常 + 2 扩展），立项扩展微调四波未达 +8pp/+0.08、已归档为科学发现。
 
 ## 目录职责
 
@@ -21,7 +21,7 @@
 
 - **算力**：GPU 服务器（本课题用 NVIDIA Quadro RTX 6000 24GB）。
 - **依赖**：官方 open-p2p 仓库（含 `elefant` 包）+ 其 venv（Python 3.12，torch 2.11+cu128、lightning、torchcodec、protobuf）。本项目依赖固定：`uv sync --extra gpu`（见 `pyproject.toml` + `依赖清单.md`；`elefant` 由 `infer.py --official-repo` 指路）。
-- **数据与权重**（运行前提，不入库）：toy 数据（`p2p-toy-examples`）、150M 权重 `checkpoint-step=00500000.ckpt`；获取见 `开发日志.md` 第 4 天。
+- **数据与权重**（运行前提，不入库）：toy 数据 = huggingface 数据集 `elefantai/p2p-toy-examples`（3 段视频 + 标注，约 1GB）；150M 权重 = `elefantai/open-p2p` 的 `checkpoint-step=00500000.ckpt`（2.2GB）+ `model_config.yaml`。下载用 `uv run --with huggingface_hub`（只装 huggingface_hub，绕开官方 pyproject 的 Python 版本锁）；完整下载命令见 `开发日志.md` 第 4 天。
 - 三个脚本均只依赖标准库 + 上述官方依赖；`evaluate.py` 仅标准库，可在任意 Python 3.11+ 环境跑。
 
 ## 启动 / 首跑
@@ -51,9 +51,11 @@ python scripts/evaluate.py --pred pred/predictions.json --label out/samples.json
 
 > `infer.py` 的 `--mode free_running` 用于录屏演示"模型自主运行"（逐帧自主预测、误差累积、key_acc 天然偏低）；验收指标用默认的 `teacher_forcing`。详见 `演示说明.md`。
 
-## 停止
+## 停止与回退
 
-三个脚本均为"运行即结束"的短命令，无常驻服务；跑完进程自然退出，中途中断按 `Ctrl+C`。唯一例外是 `free_running` 模式需约 13 分钟（1600 次前向）。
+三个脚本均为“运行即结束”的短命令，无常驻服务；跑完进程自然退出，中途中断按 `Ctrl+C`。唯一例外是 `free_running` 模式需约 13 分钟（1600 次前向）。
+
+**回退**：本项目无常驻服务，回退指“换回基线权重”。若微调后权重（`out_gta_*/checkpoints/*.ckpt`）加载报错或指标退化，把 `infer.py` 的 `--weights` 换回 150M 基线权重 `checkpoints/150M/checkpoint-step=00500000.ckpt` 即可恢复基线 88.0% / 0.756。
 
 ## 环境变量
 
