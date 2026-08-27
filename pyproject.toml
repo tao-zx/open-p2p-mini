@@ -1,4 +1,4 @@
-# 课题六 · 行动克隆游戏智能体（Open P2P）— 依赖固定（块 1）
+# 课题六 · 行为克隆游戏智能体（Open P2P）— 依赖固定（块 1）
 #
 # 用途：让第二人 `uv sync` 一键复现环境（主路径三脚本所需依赖）。
 # 分层说明见 依赖清单.md；脚本接口/退出码见 接口约定.md。
@@ -13,7 +13,7 @@
 [project]
 name = "open-p2p-action-cloning"
 version = "0.1.0"
-description = "课题六 · 行动克隆游戏智能体（Open P2P）— 主路径三脚本 + 依赖固定"
+description = "课题六 · 行为克隆游戏智能体（Open P2P）— 主路径三脚本 + 依赖固定"
 requires-python = ">=3.11"
 dependencies = [
     "numpy>=1.26",

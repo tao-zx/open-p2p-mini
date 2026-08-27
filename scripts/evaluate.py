@@ -8,7 +8,8 @@
   取 x、y 两轴相关系数的平均（阈值 ≥0.5）。
 
 口径（见 数据模型.md 说明 2）：
-- 只取 user_action（人类动作），is_known=false 的帧未可靠标注，评测时跳过；
+- GT 动作用 preprocess 产出的标注（system_action 优先，system 未知回退 user_action），
+  is_known=false 的帧未可靠标注，评测时跳过；
 - 空帧（无按键无鼠标位移）照常参与按键准确率（预测"空"=正确），也参与鼠标相关。
 
 约定见 接口约定.md；退出码 0=成功 / 2=参数错误 / 3=数据错误。

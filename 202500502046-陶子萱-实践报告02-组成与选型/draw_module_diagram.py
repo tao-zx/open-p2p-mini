@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""绘制 课题六“行动克隆游戏智能体”系统模块图（实践报告02 用）。"""
+"""绘制 课题六“行为克隆游戏智能体”系统模块图（实践报告02 用）。"""
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -46,7 +46,7 @@ def arrow(p1, p2, label='', lp=None, rad=0.0, ls='-', lw=1.5, color=C_ARROW):
 
 
 # ================= 标题 =================
-ax.text(7, 13.25, '行动克隆游戏智能体（Open Pixel2Play）· 系统模块图',
+ax.text(7, 13.25, '行为克隆游戏智能体（Open Pixel2Play）· 系统模块图',
         ha='center', va='center', fontsize=18, fontweight='bold', color=C_TEXT)
 
 # ================= 系统边界（虚线框） =================
